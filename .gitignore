@@ -1,55 +1,32 @@
-# Prerequisites
-*.d
+# Keil uVision user-specific settings (causes merge conflicts)
+*.uvgui*
+*.uvopt*
+*.uvguix.*
+*.uvoptx
 
-# Object files
+# Build outputs and temporary compiler files
+obj/
+lst/
 *.o
-*.ko
-*.obj
-*.elf
-
-# Linker output
-*.ilk
-*.map
-*.exp
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
-
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
-
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
+*.d
+*.axf
+*.bin
 *.hex
+*.htm
+*.map
+*.dep
+*.build_log.htm
+*.crf
+*.lnp
+*.sct
+__*
 
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
+# Debugger dynamic/local state
+Nu_Link_Driver.ini
+*.bak
+*._ia
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
-
-# debug information files
-*.dwo
+# OS artifacts
+.DS_Store
+Thumbs.db
+Desktop.ini
