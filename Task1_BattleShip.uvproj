@@ -488,6 +488,21 @@
               <FileType>1</FileType>
               <FilePath>.\uart_comm.c</FilePath>
             </File>
+            <File>
+              <FileName>EBI_LCD_Module.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\EBI_LCD_Module.c</FilePath>
+            </File>
+            <File>
+              <FileName>EBI_LCD_Module.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\EBI_LCD_Module.h</FilePath>
+            </File>
+            <File>
+              <FileName>image_16x32.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\image_16x32.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
