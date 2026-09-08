@@ -24,9 +24,9 @@ bool Map_ValidateAndLoad(const char *buffer) {
     if (ship_cells != 10) {
         return false; // Invalid number of ship cells
     }
-
+		
     /* Validate each ship cell has exactly one orthogonal neighbor */
-    for (int r = 0; r < 8; r++) {
+    for (r = 0; r < 8; r++) {
         for (int c = 0; c < 8; c++) {
             if (temp_grid[r][c]) {
                 int neighbor_count = 0;
@@ -45,7 +45,7 @@ bool Map_ValidateAndLoad(const char *buffer) {
     }
 
     /* Validate no diagonal touching between ships */
-    for (int r = 0; r < 8; r++) {
+    for (r = 0; r < 8; r++) {
         for (int c = 0; c < 8; c++) {
             if (temp_grid[r][c]) {
                 /* Check all 8 diagonal neighbors */
@@ -61,7 +61,7 @@ bool Map_ValidateAndLoad(const char *buffer) {
     memcpy((void *)g_game.hidden_map, (void *)temp_grid, sizeof(temp_grid));
 
     /* Initialize display grid with all unfired cells */
-    for (int r = 0; r < 8; r++) {
+    for (r = 0; r < 8; r++) {
         for (int c = 0; c < 8; c++) {
             g_game.display_grid[r][c] = '.'; 
         }
@@ -81,8 +81,6 @@ static void FormatTime(uint16_t seconds, char *buf) {
 void Display_RenderScreen(void) {
     char time_buf[8];
 
-    /* Clear screen and move cursor to home */
-    UART0_SendString("\033[2J\033[H");
 
     /* Display header */
     UART0_SendString("  BATTLESHIP  -  M487\r\n");
@@ -111,7 +109,6 @@ void Display_RenderScreen(void) {
 
     /* Display grid header (column numbers) */
     UART0_SendString("      0 1 2 3 4 5 6 7\r\n");
-
     /* Display grid with row numbers */
     for (int r = 0; r < 8; r++) {
         sprintf(time_buf, "   %d  ", r);
@@ -173,12 +170,12 @@ void Display_ShowEndGame(bool won) {
         /* Reveal the hidden map on loss */
         UART0_SendString("  HIDDEN MAP REVEALED:\r\n");
         UART0_SendString("      0 1 2 3 4 5 6 7\r\n");
-
-        for (int r = 0; r < 8; r++) {
+				int r,c;
+        for (r = 0; r < 8; r++) {
             sprintf(time_buf, "   %d  ", r);
             UART0_SendString(time_buf);
 
-            for (int c = 0; c < 8; c++) {
+            for (c = 0; c < 8; c++) {
                 char symbol = g_game.hidden_map[r][c] ? 'X' : '-';
                 UART0_SendChar(symbol);
                 UART0_SendChar(' ');

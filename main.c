@@ -1,5 +1,7 @@
 #include "NuMicro.h"
 #include "game_shared.h"
+#include <stdio.h>
+#include <string.h>
 
 int main(void) {
     System_Clock_Init_Reg();

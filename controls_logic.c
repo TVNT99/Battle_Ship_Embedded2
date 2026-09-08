@@ -1,12 +1,14 @@
 #include "NuMicro.h"
 #include "game_shared.h"
+#include <stdio.h>
+#include <string.h>
 
 /* Simple delay without busy loops that lock out ISRs */
 static void Software_Delay(uint32_t count) {
     while (count--) __NOP();
 }
 
-/* GPIO Inputs: Joystick (PG.2, PC.10, PC.9, PG.4, PG.3), SW2 (PG.15) */
+/* GPIO Inputs: Joystick (PG.2, PC.10, PC.9, PG.4, PG.3, PF.11), SW2 (PG.15) */
 void GPIO_Input_Init_Reg(void) {
     SYS_UnlockReg();
 
@@ -21,22 +23,22 @@ void GPIO_Input_Init_Reg(void) {
     PF->MODE &= ~(0x3 << 22);
 
     /* Enable Debounce Engine */
-    GPIO->DBCTL = (1 << 0) | (0 << 1) | (0x4 << 2);  /* Enable, LIRC source, CLK divider */
+    GPIO->DBCTL =  (1 << 4) | (0x7 << 0);  /* Enable, LIRC(10kHz), DBCLKSEL=128 clks (~12.8ms) */
 
     /* Enable debounce on input pins */
     PG->DBEN |= (1 << 2) | (1 << 3) | (1 << 4) | (1 << 15);  /* PG.2, PG.3, PG.4, PG.15 */
     PC->DBEN |= (1 << 9) | (1 << 10);                        /* PC.9, PC.10 */
     PF->DBEN |= (1 << 11);                                   /* PF.11 */
 
-    /* Falling-edge trigger configuration */
-    PG->INTTYPE &= ~((1 << 2) | (1 << 3) | (1 << 4) | (1 << 15));  /* Level triggered */
+    /* Falling-edge trigger configuration (buttons active-low) */
+    PG->INTTYPE &= ~((1 << 2) | (1 << 3) | (1 << 4) | (1 << 15));  /* Edge trigger  */
     PG->INTEN  |= (1 << 2) | (1 << 3) | (1 << 4) | (1 << 15);      /* Enable interrupts */
 
-    PC->INTTYPE &= ~((1 << 9) | (1 << 10));
-    PC->INTEN  |= (1 << 9) | (1 << 10);
+    PC->INTTYPE &= ~((1 << 9) | (1 << 10));                        /* Edge trigger */
+    PC->INTEN  |= (1 << 9) | (1 << 10);                            /* Enable interrupts */
 
-    PF->INTTYPE &= ~(1 << 11);
-    PF->INTEN  |= (1 << 11);
+    PF->INTTYPE &= ~(1 << 11);                                     /* Edge trigger */
+    PF->INTEN  |= (1 << 11);                                       /* Enable interrupt */
 
     /* Enable NVIC interrupts */
     NVIC_EnableIRQ(GPG_IRQn);
@@ -48,14 +50,22 @@ void GPIO_Input_Init_Reg(void) {
 
 /* Hardware Timer 0: 1 Hz Periodic Tick for 10-second Shot Timer & Measurement */
 void Timer_Init_Reg(void) {
+    /* Set Timer 0 clock source to HCLK */
+    CLK->CLKSEL1 &= ~(0x7 << 8);      /* Clear bits 10:8 for TMR0SEL */
+    CLK->CLKSEL1 |= (0x0 << 8);       /* Set to HCLK (000b) - 12MHz */
+
     /* Enable Timer 0 clock */
     CLK->APBCLK0 |= (1 << 2);
 
     /* Configure Timer 0: Periodic mode, 1Hz tick */
+    /* HCLK = 12 MHz */
     /* Prescaler: 12 (divides 12MHz to 1MHz) */
     /* Compare value: 1,000,000 (for 1 second period) */
-    TIMER0->CTL = (11 << 0) | (1 << 8) | (1 << 29);  /* PSC=11, MODE=1 (periodic), INTEN */
-    TIMER0->CMP = 1000000;  /* 1 second */
+    TIMER0->CTL = 0;                  /* Reset CTL register */
+    TIMER0->CTL |= (11 << 0);         /* PSC=11 (divider=12) → 1MHz */
+    TIMER0->CTL |= (0x1 << 27);       /* Set MODE=1 (Periodic mode) */
+    TIMER0->CTL |= (1 << 29);         /* Enable interrupt (INTEN) */
+    TIMER0->CMP = 1000000-1;            /* 1 second timeout */
 
     /* Enable Timer 0 interrupt in NVIC */
     NVIC_EnableIRQ(TMR0_IRQn);
@@ -75,7 +85,8 @@ void LED_Init_Reg(void) {
 }
 
 void LED_FlashHit_3x(void) {
-    for (int i = 0; i < 3; i++) {
+		int i;
+    for (i = 0; i < 3; i++) {
         PH->DOUT &= ~((1 << 0) | (1 << 1) | (1 << 2)); /* LED ON */
         Software_Delay(600000);
         PH->DOUT |= (1 << 0) | (1 << 1) | (1 << 2); /* LED OFF */
@@ -91,17 +102,19 @@ void TMR0_IRQHandler(void) {
 
         if (g_game.state == STATE_PLAY) {
             g_game.elapsed_seconds++;
+
             if (g_game.shot_timer > 0) {
                 g_game.shot_timer--;
             }
 
-            /* Timeout: 10 seconds expired */
+            /* Timeout: 10 seconds expired - deduct a shot */
             if (g_game.shot_timer == 0) {
+                // UART0_SendString("[TMR0] Shot timer expired\r\n");
                 if (g_game.shots_left > 0) {
                     g_game.shots_left--;
                 }
                 g_game.shot_timer = 10;
-                Display_RenderScreen();
+                // Display_RenderScreen();  /* Update on timeout event */
 
                 if (g_game.shots_left == 0) {
                     g_game.state = STATE_LOSE;
@@ -184,21 +197,19 @@ void Game_CheckWinLose(void) {
         Display_ShowEndGame(false);
     }
 }
-/* Joystick and Restart Interrupt Handler */
 void GPG_IRQHandler(void) {
     uint32_t status = PG->INTSRC;
-    PG->INTSRC = status;  /* Clear status */
+    PG->INTSRC = status;
 
     /* SW2 Restart (PG.15) */
     if (status & (1 << 15)) {
         if (g_game.state == STATE_WELCOME || g_game.state == STATE_WIN || g_game.state == STATE_LOSE) {
             g_game.state = STATE_LOAD;
-            /* Reset UART buffer index for new map reception */
             extern volatile uint8_t s_rx_index;
             extern volatile bool s_map_ready;
             s_rx_index = 0;
             s_map_ready = false;
-            UART0_SendString("\033[2J\033[HWELCOME - WAITING FOR MAP\r\n"); // Clear screen and display welcome message
+            UART0_SendString("\033[2J\033[HWELCOME - WAITING FOR MAP\r\n");
         }
     }
 
@@ -212,6 +223,7 @@ void GPG_IRQHandler(void) {
             Display_RenderScreen();
         }
         if (status & (1 << 3)) {  /* FIRE (Center, PG.3) */
+            UART0_SendString("FIRE pressed\r\n");
             Game_FireAtCursor();
         }
     }
@@ -229,6 +241,17 @@ void GPC_IRQHandler(void) {
         if (status & (1 << 10)) {  /* DOWN (PC.10) */
             if (g_game.cursor_row < 7) g_game.cursor_row++;
             Display_RenderScreen();
+        }
+    }
+}
+
+void GPF_IRQHandler(void) {
+    uint32_t status = PF->INTSRC;
+    PF->INTSRC = status;
+
+    if (g_game.state == STATE_PLAY) {
+        if (status & (1 << 11)) {  /* FIRE (Center, PF.11) */ 
+            Game_FireAtCursor(); // Additional Fire button
         }
     }
 }

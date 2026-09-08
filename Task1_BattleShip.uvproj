@@ -7,7 +7,7 @@
 
   <Targets>
     <Target>
-      <TargetName>EEET2481_Tutorial_7_EADC</TargetName>
+      <TargetName>Task1_BattleShip</TargetName>
       <ToolsetNumber>0x4</ToolsetNumber>
       <ToolsetName>ARM-ADS</ToolsetName>
       <pCCUsed>6220000::V6.22::ARMCLANG</pCCUsed>
@@ -47,7 +47,7 @@
             <InvalidFlash>1</InvalidFlash>
           </TargetStatus>
           <OutputDirectory>.\obj\</OutputDirectory>
-          <OutputName>EEET2481_Tutorial_7_EADC</OutputName>
+          <OutputName>Task1_BattleShip</OutputName>
           <CreateExecutable>1</CreateExecutable>
           <CreateLib>0</CreateLib>
           <CreateHexFile>0</CreateHexFile>
@@ -173,7 +173,7 @@
             <RunIndependent>0</RunIndependent>
             <UpdateFlashBeforeDebugging>1</UpdateFlashBeforeDebugging>
             <Capability>1</Capability>
-            <DriverSelection>4107</DriverSelection>
+            <DriverSelection>4106</DriverSelection>
           </Flash1>
           <bUseTDR>0</bUseTDR>
           <Flash2>Bin\Nu_Link.dll</Flash2>
@@ -379,7 +379,7 @@
               <MiscControls></MiscControls>
               <Define></Define>
               <Undefine></Undefine>
-              <IncludePath>.\Library\Device\Nuvoton\M480\Include;.\Library\StdDriver\inc;.\Library\CMSIS\Include</IncludePath>
+              <IncludePath>.\Library\Device\Nuvoton\M480\Include;.\Library\StdDriver\inc;.\Library\CMSIS\Include;.\Library\Device\Nuvoton\M480\Source</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -467,6 +467,26 @@
               <FileName>main.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\main.c</FilePath>
+            </File>
+            <File>
+              <FileName>game_shared.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\game_shared.h</FilePath>
+            </File>
+            <File>
+              <FileName>controls_logic.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\controls_logic.c</FilePath>
+            </File>
+            <File>
+              <FileName>map_display.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\map_display.c</FilePath>
+            </File>
+            <File>
+              <FileName>uart_comm.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\uart_comm.c</FilePath>
             </File>
           </Files>
         </Group>
