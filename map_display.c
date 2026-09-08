@@ -198,3 +198,96 @@ void Display_ShowEndGame(bool won) {
 
     UART0_SendString("\r\n  Press SW2 to restart...\r\n");
 }
+
+/* LCD Display Functions */
+#include "EBI_LCD_Module.h"
+
+void Display_LCD_RenderScreen(void) {
+    char buf[32];
+
+    /* Clear screen */
+    LCD_BlankArea(0, 0, 240, 320, C_BLACK);
+
+    /* Title */
+    LCD_PutString(50, 5, "BATTLESHIP", C_WHITE, C_BLACK);
+
+    /* Stats line 1: Shots & Hits */
+    sprintf(buf, "Shots:%2d  Hits:%2d", g_game.shots_left, g_game.hits);
+    LCD_PutString(10, 25, (uint8_t*)buf, C_YELLOW, C_BLACK);
+
+    /* Stats line 2: Ships sunk */
+    sprintf(buf, "Sunk: %d/5  Time:%d s", g_game.ships_sunk, g_game.elapsed_seconds);
+    LCD_PutString(10, 40, (uint8_t*)buf, C_CYAN, C_BLACK);
+
+    /* Draw 8x8 grid starting at (10, 60) with 20px cells */
+    int grid_x = 20;
+    int grid_y = 60;
+    int cell_size = 20;
+
+    for (int r = 0; r < 8; r++) {
+        for (int c = 0; c < 8; c++) {
+            int x = grid_x + c * cell_size;
+            int y = grid_y + r * cell_size;
+            char cell = g_game.display_grid[r][c];
+            uint16_t color = C_BLACK;
+
+            /* Color based on cell state */
+            if (cell == 'X') color = C_RED;        /* Hit */
+            else if (cell == 'o') color = C_BLUE;  /* Miss */
+            else if (cell == '#') color = C_GREEN; /* Sunk */
+            else color = C_BLACK;                  /* Empty/not fired */
+
+            /* Draw cell rectangle */
+            LCD_BlankArea(x, x + cell_size - 2, y, y + cell_size - 2, color);
+
+            /* Highlight cursor with white border */
+            if (r == g_game.cursor_row && c == g_game.cursor_col) {
+                /* Draw white border (simple approach: overdraw edges) */
+                LCD_BlankArea(x, x + cell_size - 2, y, y + 1, C_WHITE);
+                LCD_BlankArea(x, x + 1, y, y + cell_size - 2, C_WHITE);
+            }
+        }
+    }
+
+    /* Display legend at bottom */
+    LCD_PutString(20, 290, (uint8_t*)"[X]=Hit  [o]=Miss  [#]=Sunk", C_WHITE, C_BLACK);
+}
+
+void Display_LCD_ShowEndGame(bool won) {
+    char buf[32];
+    uint16_t shots_used;
+    uint16_t score;
+
+    /* Clear screen */
+    LCD_BlankArea(0, 0, 240, 320, C_BLACK);
+
+    if (won) {
+        LCD_PutString(40, 50, (uint8_t*)"YOU WIN!", C_GREEN, C_BLACK);
+        shots_used = 24 - g_game.shots_left;
+
+        sprintf(buf, "Shots: %d", shots_used);
+        LCD_PutString(20, 100, (uint8_t*)buf, C_WHITE, C_BLACK);
+
+        sprintf(buf, "Time: %d sec", g_game.elapsed_seconds);
+        LCD_PutString(20, 120, (uint8_t*)buf, C_WHITE, C_BLACK);
+
+        score = (500 - (shots_used * 10) - g_game.elapsed_seconds) + 500;
+        if (score < 0) score = 0;
+
+        sprintf(buf, "SCORE: %d", score);
+        LCD_PutString(30, 150, (uint8_t*)buf, C_YELLOW, C_BLACK);
+    } else {
+        LCD_PutString(30, 50, (uint8_t*)"GAME OVER", C_RED, C_BLACK);
+
+        sprintf(buf, "Ships sunk: %d/5", g_game.ships_sunk);
+        LCD_PutString(20, 100, (uint8_t*)buf, C_WHITE, C_BLACK);
+
+        shots_used = 24 - g_game.shots_left;
+        score = 500 - (shots_used * 10) - g_game.elapsed_seconds;
+
+        sprintf(buf, "SCORE: %d", score);
+        LCD_PutString(30, 150, (uint8_t*)buf, C_YELLOW, C_BLACK);
+    }
+
+    LCD_PutString(30, 250, (uint8_t*)"Press SW2 to restart", C_CYAN, C_BLACK);
+}
