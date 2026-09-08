@@ -1,5 +1,6 @@
 #include "NuMicro.h"
 #include "game_shared.h"
+#include "EBI_LCD_Module.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -9,6 +10,9 @@ int main(void) {
     GPIO_Input_Init_Reg();
     Timer_Init_Reg();
     LED_Init_Reg();
+
+    ILI9341_Initial();  /* Initialize LCD display */
+    Timer3_Init();      /* Initialize Timer3 for LCD refresh */
 
     memset((void*)&g_game, 0, sizeof(GameContext_t));
     g_game.state = STATE_WELCOME;
