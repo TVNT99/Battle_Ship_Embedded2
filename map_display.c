@@ -209,7 +209,7 @@ void Display_LCD_RenderScreen(void) {
     LCD_BlankArea(0, 0, 240, 320, C_BLACK);
 
     /* Title */
-    LCD_PutString(50, 5, "BATTLESHIP", C_WHITE, C_BLACK);
+    LCD_PutString(50, 5, (uint8_t*)"BATTLESHIP", C_WHITE, C_BLACK);
 
     /* Stats line 1: Shots & Hits */
     sprintf(buf, "Shots:%2d  Hits:%2d", g_game.shots_left, g_game.hits);
