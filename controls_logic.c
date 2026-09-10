@@ -94,14 +94,14 @@ void LED_FlashHit_3x(void) {
     }
 }
 
-/* Hardware Timer 0 ISR: Manages 10s countdown, game elapsed time, and pin toggle */
+/* Hardware Timer 0 ISR: Manages 10s per-shot countdown and game elapsed time */
 void TMR0_IRQHandler(void) {
     if (TIMER0->INTSTS & (1 << 0)) {  /* TIF: Timer Interrupt Flag */
         TIMER0->INTSTS = (1 << 0);    /* Clear interrupt flag */
-        PH->DOUT ^= (1 << 0);         /* Toggle PH.0 for Logic Analyser measurement */
-
+        PH->DOUT ^= (1 << 1);        // Measure the timer tick with the yellow LED
         if (g_game.state == STATE_PLAY) {
             g_game.elapsed_seconds++;
+            Display_LCD_RenderScreen();  // Update the LCD display with the latest game state
 
             if (g_game.shot_timer > 0) {
                 g_game.shot_timer--;
@@ -109,41 +109,58 @@ void TMR0_IRQHandler(void) {
 
             /* Timeout: 10 seconds expired - deduct a shot */
             if (g_game.shot_timer == 0) {
-                // UART0_SendString("[TMR0] Shot timer expired\r\n");
                 if (g_game.shots_left > 0) {
                     g_game.shots_left--;
                 }
                 g_game.shot_timer = 10;
-                // Display_RenderScreen();  /* Update on timeout event */
-
-                if (g_game.shots_left == 0) {
-                    g_game.state = STATE_LOSE;
-                    Display_ShowEndGame(false);
-                }
+                Display_RenderScreen(); // Update the display after a shot is deducted
             }
+
+            /* Shots exhausted or the 240s match limit reached -> lose */
+            Game_CheckWinLose();
         }
     }
 }
 
-/* Sunk Detection: A ship is 2 cells. Find partner cell and check if both are struck */
+// Sunk Detection.
 static bool CheckAndSinkPartner(int8_t r, int8_t c) {
-    int8_t pr = -1, pc = -1; /* Partner row and column */
-    /* Find orthogonal partner cell */
-    if (r > 0 && g_game.hidden_map[r - 1][c]) { pr = r - 1; pc = c; } // Check cell above for partner
-    else if (r < 7 && g_game.hidden_map[r + 1][c]) { pr = r + 1; pc = c; } // Check cell below for partner
-    else if (c > 0 && g_game.hidden_map[r][c - 1]) { pr = r; pc = c - 1; } // Check cell to the left for partner
-    else if (c < 7 && g_game.hidden_map[r][c + 1]) { pr = r; pc = c + 1; } // Check cell to the right for partner
+    int8_t pr = -1;
+    int8_t pc = -1;
 
-    if (pr != -1 && pc != -1) {
-        if (g_game.display_grid[pr][pc] == 'X') {
-            /* Both halves hit -> Mark as '#' (fully sunk) */
-            g_game.display_grid[r][c] = '#';
-            g_game.display_grid[pr][pc] = '#';
-            g_game.ships_sunk++;
-            return true;
-        }
+    /* Find the orthogonal partner cell */
+    if (r > 0 && g_game.hidden_map[r - 1][c]) {
+        pr = r - 1;
+        pc = c;
+    } else if (r < 7 && g_game.hidden_map[r + 1][c]) {
+        pr = r + 1;
+        pc = c;
+    } else if (c > 0 && g_game.hidden_map[r][c - 1]) {
+        pr = r;
+        pc = c - 1;
+    } else if (c < 7 && g_game.hidden_map[r][c + 1]) {
+        pr = r;
+        pc = c + 1;
     }
+
+    if (pr == -1 || pc == -1) {
+        return false;
+    }
+
+    if (g_game.display_grid[pr][pc] == 'X') {
+        /* Both halves hit -> mark as '#' (fully sunk) */
+        g_game.display_grid[r][c] = '#';
+        g_game.display_grid[pr][pc] = '#';
+        g_game.ships_sunk++;
+        return true;
+    }
+
     return false;
+}
+
+/* Refresh both the serial terminal and LCD panel with the current in-play state */
+static void Display_RefreshAll(void) {
+    Display_RenderScreen();
+    Display_LCD_RenderScreen();
 }
 
 /* Fire Handling at Cursor Position */
@@ -157,7 +174,7 @@ void Game_FireAtCursor(void) {
 
     /* Repeat shot check */
     if (g_game.display_grid[r][c] != '.') {
-        Display_RenderScreen();
+        Display_RefreshAll();
         UART0_SendString("  > ALREADY FIRED HERE! (Shot lost)\r\n"); // Attempted to fire at a previously targeted cell
     } else if (g_game.hidden_map[r][c] == 1) {
         g_game.display_grid[r][c] = 'X'; // Mark hit on display grid
@@ -165,66 +182,89 @@ void Game_FireAtCursor(void) {
         LED_FlashHit_3x(); // Flash LED to indicate a hit
 
         if (CheckAndSinkPartner(r, c)) {
-            Display_RenderScreen();
+            Display_RefreshAll();
             UART0_SendString("  > HIT! SHIP SUNK!\r\n"); // Successful hit and ship sunk
         } else {
-            Display_RenderScreen();
-            UART0_SendString("  > HIT!\r\n"); // Successful hit on a ship segment
+            Display_RefreshAll();
+            char hit_message[40];
+            snprintf(hit_message, sizeof(hit_message),
+                     "  > HIT! AT CURSOR (%d, %d)\r\n", r, c);
+            UART0_SendString(hit_message); // Successful hit on a ship segment
         }
     } else {
         g_game.display_grid[r][c] = 'o';
-        Display_RenderScreen();
+        Display_RefreshAll();
         UART0_SendString("  > MISS!\r\n"); // Missed shot
     }
 
     /* Win / Lose resolution */
-    if (g_game.ships_sunk == 5) {
-        g_game.state = STATE_WIN;
-        Display_ShowEndGame(true);
-    } else if (g_game.shots_left == 0) {
-        g_game.state = STATE_LOSE;
-        Display_ShowEndGame(false);
-    }
+    Game_CheckWinLose();
 }
 
-/* Check win/lose conditions and update game state */
+/* Check win/lose conditions and update game state + end-game screens.
+ * Single source of truth - also called every second from TMR0_IRQHandler
+ * so the 240s match limit is enforced even without a shot being fired. */
 void Game_CheckWinLose(void) {
     if (g_game.ships_sunk == 5) {
         g_game.state = STATE_WIN;
         Display_ShowEndGame(true);
-    } else if (g_game.shots_left == 0) {
+        Display_LCD_ShowEndGame(true);
+    } else if (g_game.shots_left == 0 || g_game.elapsed_seconds >= 240) {
         g_game.state = STATE_LOSE;
         Display_ShowEndGame(false);
+        Display_LCD_ShowEndGame(false);
     }
 }
+
 void GPG_IRQHandler(void) {
     uint32_t status = PG->INTSRC;
     PG->INTSRC = status;
 
     /* SW2 Restart (PG.15) */
     if (status & (1 << 15)) {
-        if (g_game.state == STATE_WELCOME || g_game.state == STATE_WIN || g_game.state == STATE_LOSE) {
-            g_game.state = STATE_LOAD;
+        if (g_game.state == STATE_WELCOME || g_game.state == STATE_EDIT || // Check if the game is in a state that allows restarting
+            g_game.state == STATE_WIN || g_game.state == STATE_LOSE) {
+            g_game.state = STATE_LOAD; // Set the game state to load a new map
             extern volatile uint8_t s_rx_index;
             extern volatile bool s_map_ready;
             s_rx_index = 0;
             s_map_ready = false;
-            UART0_SendString("\033[2J\033[HWELCOME - WAITING FOR MAP\r\n");
+            UART0_SendString("WELCOME - WAITING FOR MAP\r\n");
+            Display_LCD_ShowWaitingForMap();
         }
+    }
+
+    /* Any joystick press while waiting for a map starts the on-board editor */
+    if (g_game.state == STATE_LOAD && (status & ((1 << 2) | (1 << 3) | (1 << 4)))) {
+        g_game.state = STATE_EDIT;
+        Editor_Init();
+        return;
     }
 
     if (g_game.state == STATE_PLAY) {
         if (status & (1 << 2)) {  /* UP (PG.2) */
             if (g_game.cursor_row > 0) g_game.cursor_row--;
-            Display_RenderScreen();
+            Display_RefreshAll();
         }
         if (status & (1 << 4)) {  /* RIGHT (PG.4) */
             if (g_game.cursor_col < 7) g_game.cursor_col++;
-            Display_RenderScreen();
+            Display_RefreshAll();
         }
         if (status & (1 << 3)) {  /* FIRE (Center, PG.3) */
             UART0_SendString("FIRE pressed\r\n");
             Game_FireAtCursor();
+        }
+    } else if (g_game.state == STATE_EDIT) {
+        if (status & (1 << 2)) {  /* UP (PG.2) */
+            if (g_game.cursor_row > 0) g_game.cursor_row--;
+            Editor_Redraw();
+        }
+        if (status & (1 << 4)) {  /* RIGHT (PG.4) */
+            if (g_game.cursor_col < 7) g_game.cursor_col++;
+            Editor_Redraw();
+        }
+        if (status & (1 << 3)) {  /* FIRE (Center, PG.3) -> select cell */
+            Editor_SelectCursor();
         }
     }
 }
@@ -233,25 +273,30 @@ void GPC_IRQHandler(void) {
     uint32_t status = PC->INTSRC;
     PC->INTSRC = status;
 
+    /* Any joystick press while waiting for a map starts the on-board editor */
+    if (g_game.state == STATE_LOAD && (status & ((1 << 9) | (1 << 10)))) {
+        g_game.state = STATE_EDIT;
+        Editor_Init();
+        return;
+    }
+
     if (g_game.state == STATE_PLAY) {
         if (status & (1 << 9)) {  /* LEFT (PC.9) */
             if (g_game.cursor_col > 0) g_game.cursor_col--;
-            Display_RenderScreen();
+            Display_RefreshAll();
         }
         if (status & (1 << 10)) {  /* DOWN (PC.10) */
             if (g_game.cursor_row < 7) g_game.cursor_row++;
-            Display_RenderScreen();
+            Display_RefreshAll();
         }
-    }
-}
-
-void GPF_IRQHandler(void) {
-    uint32_t status = PF->INTSRC;
-    PF->INTSRC = status;
-
-    if (g_game.state == STATE_PLAY) {
-        if (status & (1 << 11)) {  /* FIRE (Center, PF.11) */ 
-            Game_FireAtCursor(); // Additional Fire button
+    } else if (g_game.state == STATE_EDIT) {
+        if (status & (1 << 9)) {  /* LEFT (PC.9) */
+            if (g_game.cursor_col > 0) g_game.cursor_col--;
+            Editor_Redraw();
+        }
+        if (status & (1 << 10)) {  /* DOWN (PC.10) */
+            if (g_game.cursor_row < 7) g_game.cursor_row++;
+            Editor_Redraw();
         }
     }
 }

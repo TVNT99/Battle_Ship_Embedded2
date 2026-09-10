@@ -24,12 +24,14 @@
 #define C_GREEN     0x07E0
 #define C_CYAN      0x7FFF
 #define C_YELLOW    0xFFE0
+#define C_GRAY      0xC618
 
 // Characters
 extern uint8_t Font8x16[];
 extern uint16_t Font16x32[];
 
 // Sub-functions
+void EBI_LCD_Init_Reg(void);
 void ILI9341_Initial(void);
 void Timer3_Init(void);
 void LCD_WR_REG(uint16_t cmd);

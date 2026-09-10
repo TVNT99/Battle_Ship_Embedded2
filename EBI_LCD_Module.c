@@ -26,7 +26,6 @@
 
 volatile    uint8_t     Timer3_flag = 0;
 volatile    uint8_t     Timer3_cnt = 0;
-
 volatile    uint32_t    g_u32AdcIntFlag_TP;
 
 /**
@@ -80,6 +79,76 @@ void Timer3_Init(void)
     /* Reset Timer3_cnt */
     Timer3_cnt = 0;
 
+}
+
+/**
+ * @brief       Configure EBI bus + LCD control pins (register-level)
+ *
+ * @param       None
+ *
+ * @return      None
+ *
+ * @details     Sets up the EBI_AD0-15/nWR/nRD/nCS0 multi-function pins, the
+ *              LCD RS/RST/Backlight GPIOs, and opens EBI bank0 so the LCD can
+ *              actually be driven over the EBI bus. Must run before
+ *              ILI9341_Initial().
+ */
+void EBI_LCD_Init_Reg(void)
+{
+    SYS_UnlockReg();
+
+    /* Enable EBI module clock */
+    CLK->AHBCLK |= CLK_AHBCLK_EBICKEN_Msk;
+
+    /* EBI AD0~5 pins on PG.9~14 */
+    SYS->GPG_MFPH &= ~(SYS_GPG_MFPH_PG9MFP_Msk  | SYS_GPG_MFPH_PG10MFP_Msk |
+                       SYS_GPG_MFPH_PG11MFP_Msk | SYS_GPG_MFPH_PG12MFP_Msk |
+                       SYS_GPG_MFPH_PG13MFP_Msk | SYS_GPG_MFPH_PG14MFP_Msk);
+    SYS->GPG_MFPH |= (SYS_GPG_MFPH_PG9MFP_EBI_AD0  | SYS_GPG_MFPH_PG10MFP_EBI_AD1 |
+                      SYS_GPG_MFPH_PG11MFP_EBI_AD2 | SYS_GPG_MFPH_PG12MFP_EBI_AD3 |
+                      SYS_GPG_MFPH_PG13MFP_EBI_AD4 | SYS_GPG_MFPH_PG14MFP_EBI_AD5);
+
+    /* EBI AD6, AD7 pins on PD.8, PD.9 */
+    SYS->GPD_MFPH &= ~(SYS_GPD_MFPH_PD8MFP_Msk | SYS_GPD_MFPH_PD9MFP_Msk);
+    SYS->GPD_MFPH |= (SYS_GPD_MFPH_PD8MFP_EBI_AD6 | SYS_GPD_MFPH_PD9MFP_EBI_AD7);
+
+    /* EBI AD8, AD9 pins on PE.14, PE.15 */
+    SYS->GPE_MFPH &= ~(SYS_GPE_MFPH_PE14MFP_Msk | SYS_GPE_MFPH_PE15MFP_Msk);
+    SYS->GPE_MFPH |= (SYS_GPE_MFPH_PE14MFP_EBI_AD8 | SYS_GPE_MFPH_PE15MFP_EBI_AD9);
+
+    /* EBI AD10, AD11 pins on PE.1, PE.0 */
+    SYS->GPE_MFPL &= ~(SYS_GPE_MFPL_PE1MFP_Msk | SYS_GPE_MFPL_PE0MFP_Msk);
+    SYS->GPE_MFPL |= (SYS_GPE_MFPL_PE1MFP_EBI_AD10 | SYS_GPE_MFPL_PE0MFP_EBI_AD11);
+
+    /* EBI AD12~15 pins on PH.8~11 */
+    SYS->GPH_MFPH &= ~(SYS_GPH_MFPH_PH8MFP_Msk  | SYS_GPH_MFPH_PH9MFP_Msk |
+                       SYS_GPH_MFPH_PH10MFP_Msk | SYS_GPH_MFPH_PH11MFP_Msk);
+    SYS->GPH_MFPH |= (SYS_GPH_MFPH_PH8MFP_EBI_AD12  | SYS_GPH_MFPH_PH9MFP_EBI_AD13 |
+                      SYS_GPH_MFPH_PH10MFP_EBI_AD14 | SYS_GPH_MFPH_PH11MFP_EBI_AD15);
+
+    /* EBI RD and WR pins on PE.4 and PE.5 */
+    SYS->GPE_MFPL &= ~(SYS_GPE_MFPL_PE4MFP_Msk | SYS_GPE_MFPL_PE5MFP_Msk);
+    SYS->GPE_MFPL |= (SYS_GPE_MFPL_PE4MFP_EBI_nWR | SYS_GPE_MFPL_PE5MFP_EBI_nRD);
+
+    /* EBI CS0 pin on PD.14 */
+    SYS->GPD_MFPH &= ~SYS_GPD_MFPH_PD14MFP_Msk;
+    SYS->GPD_MFPH |= SYS_GPD_MFPH_PD14MFP_EBI_nCS0;
+
+    /* PH.3 = LCD RS, output mode, idle high */
+    PH->MODE = (PH->MODE & ~(0x3 << 6)) | (0x1 << 6);
+    PH3 = 1;
+
+    /* PB.6 = LCD RST, PB.7 = LCD Backlight, both output mode */
+    PB->MODE = (PB->MODE & ~((0x3 << 12) | (0x3 << 14))) | ((0x1 << 12) | (0x1 << 14));
+    PB6 = 1;
+    PB7 = 1;    /* Backlight ON */
+
+    /* Open EBI bank0 for 16-bit access to the LCD module */
+    EBI_Open(EBI_BANK0, EBI_BUSWIDTH_16BIT, EBI_TIMING_NORMAL, 0, EBI_CS_ACTIVE_LOW);
+    EBI->CTL0 |= EBI_CTL0_CACCESS_Msk;
+    EBI->TCTL0 |= (EBI_TCTL0_WAHDOFF_Msk | EBI_TCTL0_RAHDOFF_Msk);
+
+    SYS_LockReg();
 }
 
 /**
@@ -421,16 +490,47 @@ void LCD_BlankArea(uint16_t X, uint16_t Y, uint16_t W, uint16_t H, uint16_t colo
  */
 uint16_t Get_TP_X(void)
 {
-    /* Touch screen not implemented for Battle Ship */
-    return 0;
-}
+    uint16_t    x_adc_in;
+    uint16_t    X_pos;
+
+    /*=== Get X from ADC input ===*/
+    PB9 = 1;
+    PH4 = 0;
+    GPIO_SetMode(PB, BIT9, GPIO_MODE_OUTPUT);   // XR
+    GPIO_SetMode(PH, BIT4, GPIO_MODE_OUTPUT);   // XL
+    GPIO_SetMode(PH, BIT5, GPIO_MODE_INPUT);    // YD
+
+    /* Configure the GPB8 ADC analog input pins. */
+    SYS->GPB_MFPH &= ~(SYS_GPB_MFPH_PB8MFP_Msk | SYS_GPB_MFPH_PB9MFP_Msk);
+    SYS->GPB_MFPH |= SYS_GPB_MFPH_PB8MFP_EADC0_CH8;
+
+    /* Disable the GPB8 digital input path to avoid the leakage current. */
+    GPIO_DISABLE_DIGITAL_PATH(PB, BIT8);
+
+    /* Configure the sample module 1 for analog input channel 8 and software trigger source.*/
+    EADC_ConfigSampleModule(EADC, 1, EADC_SOFTWARE_TRIGGER, 8); // YU
+
+    /* Clear the A/D ADINT1 interrupt flag for safe */
+    EADC_CLR_INT_FLAG(EADC, EADC_STATUS2_ADIF1_Msk);
+
+    /* Enable the sample module 1 interrupt. */
+    EADC_ENABLE_INT(EADC, BIT1);    //Enable sample module A/D ADINT1 interrupt.
+    EADC_ENABLE_SAMPLE_MODULE_INT(EADC, 1, BIT1);    //Enable sample module 1 interrupt.
+    NVIC_EnableIRQ(EADC01_IRQn);
+
+    /* Reset the ADC interrupt indicator and trigger sample module 1 to start A/D conversion */
+    g_u32AdcIntFlag_TP = 0;
+    EADC_START_CONV(EADC, BIT1);
+
+    /* Wait ADC interrupt (g_u32AdcIntFlag_TP will be set at IRQ_Handler function) */
+    while(g_u32AdcIntFlag_TP == 0) {};
+    x_adc_in = EADC_GET_CONV_DATA(EADC, 1)>>2;
 
     /*=== Calculate the X position ===*/
     X_pos = (x_adc_in - 170)/2.8;	// range of x_adc_in is [0:842]
 
     if(X_pos >= (LCD_W - 1)) X_pos = LCD_W - 1;
 
-    printf("Position X: %d\n", X_pos);
     return X_pos;
 
 }
@@ -444,54 +544,52 @@ uint16_t Get_TP_X(void)
  *
  * @details     To get the Y position when finger touching on the LCD screen
  */
-uint16_t Get_TP_Y(void) { return 0; }
+uint16_t Get_TP_Y(void)
+{
+    uint16_t    y_adc_in;
+    uint16_t    Y_pos;
 
+    /*=== Get Y from ADC input ===*/
+    PB8 = 1;
+    PH5 = 0;
+    GPIO_SetMode(PB, BIT8, GPIO_MODE_OUTPUT);   // YU
+    GPIO_SetMode(PH, BIT5, GPIO_MODE_OUTPUT);   // YD
+    GPIO_SetMode(PH, BIT4, GPIO_MODE_INPUT);    // XL
 
+    /* Configure the GPB9 ADC analog input pins. */
+    SYS->GPB_MFPH &= ~(SYS_GPB_MFPH_PB8MFP_Msk | SYS_GPB_MFPH_PB9MFP_Msk);
+    SYS->GPB_MFPH |= SYS_GPB_MFPH_PB9MFP_EADC0_CH9;
 
+    /* Disable the GPB9 digital input path to avoid the leakage current. */
+    GPIO_DISABLE_DIGITAL_PATH(PB, BIT9);
 
+    /* Configure the sample module 2 for analog input channel 9 and software trigger source.*/
+    EADC_ConfigSampleModule(EADC, 2, EADC_SOFTWARE_TRIGGER, 9); // XR
 
+    /* Clear the A/D ADINT1 interrupt flag for safe */
+    EADC_CLR_INT_FLAG(EADC, EADC_STATUS2_ADIF1_Msk);
 
+    /* Enable the sample module 2 interrupt. */
+    EADC_ENABLE_INT(EADC, BIT2);    //Enable sample module A/D ADINT1 interrupt.
+    EADC_ENABLE_SAMPLE_MODULE_INT(EADC, 1, BIT2);    //Enable sample module 2 interrupt.
+    NVIC_EnableIRQ(EADC02_IRQn);
 
+    /* Reset the ADC interrupt indicator and trigger sample module 2 to start A/D conversion */
+    g_u32AdcIntFlag_TP = 0;
+    EADC_START_CONV(EADC, BIT2);
 
+    /* Wait ADC interrupt (g_u32AdcIntFlag_TP will be set at IRQ_Handler function) */
+    while(g_u32AdcIntFlag_TP == 0) {};
+    y_adc_in = EADC_GET_CONV_DATA(EADC, 2)>>2;
 
+    /*=== Calculate the Y position ===*/
+    Y_pos = (y_adc_in - 150)/2.34; // range of y_adc_in is [0:898.8]
 
+    if(Y_pos >= (LCD_H - 1)) Y_pos = LCD_H - 1;
 
+    return Y_pos;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+}
 
 /**
  * @brief       ADC01 IRQ handler
@@ -508,6 +606,52 @@ void EADC01_IRQHandler(void)
     EADC_CLR_INT_FLAG(EADC, EADC_STATUS2_ADIF1_Msk);
 
     g_u32AdcIntFlag_TP = 1;
-
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

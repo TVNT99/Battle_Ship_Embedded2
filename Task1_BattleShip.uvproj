@@ -444,6 +444,11 @@
               <FilePath>.\Library\StdDriver\src\clk.c</FilePath>
             </File>
             <File>
+              <FileName>ebi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Library\StdDriver\src\ebi.c</FilePath>
+            </File>
+            <File>
               <FileName>gpio.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\Library\StdDriver\src\gpio.c</FilePath>
@@ -457,6 +462,11 @@
               <FileName>sys.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\Library\StdDriver\src\sys.c</FilePath>
+            </File>
+            <File>
+              <FileName>eadc.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Library\StdDriver\src\eadc.c</FilePath>
             </File>
           </Files>
         </Group>

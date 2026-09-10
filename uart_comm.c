@@ -33,6 +33,14 @@ void System_Clock_Init_Reg(void) {
     CLK->CLKDIV0 &= ~(0xF << 0);   /* Clear HCLKDIV */
     CLK->CLKDIV0 |= 0x0;            /* Divider = 1 */
 
+    /* Enable EADC clock for the resistive touch panel (Get_TP_X/Get_TP_Y) */
+    CLK_SetModuleClock(EADC_MODULE, 0, CLK_CLKDIV0_EADC(8));
+    CLK_EnableModuleClock(EADC_MODULE);
+
+    /* Enable Timer3 clock (drives the ~100ms touch-poll tick, see Timer3_Init) */
+    CLK_SetModuleClock(TMR3_MODULE, CLK_CLKSEL1_TMR3SEL_HXT, 0);
+    CLK_EnableModuleClock(TMR3_MODULE);
+
     SYS_LockReg();
 }
 
